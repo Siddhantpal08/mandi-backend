@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: mandi_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: mandi_ai
+      POSTGRES_USER: mandi_user
+      POSTGRES_PASSWORD: mandi123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: .
+    container_name: mandi_backend
+    restart: always
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://mandi_user:mandi123@db:5432/mandi_ai
+    ports:
+      - "8000:8000"
+
+volumes:
+  postgres_data:
