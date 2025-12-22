@@ -1,6 +1,8 @@
+import json
+from pathlib import Path
 from app.db.database import engine, SessionLocal
 from app.db.models import Base, MandiPrice
-from app.data.mandiSampleData import MANDI_DATA
+
 
 def init_db():
     Base.metadata.create_all(bind=engine)
@@ -9,7 +11,13 @@ def init_db():
     count = db.query(MandiPrice).count()
 
     if count == 0:
-        for item in MANDI_DATA:
+        # Correct path to JSON file
+        data_path = Path(__file__).resolve().parent.parent / "data" / "mandi_sample_data.json"
+
+        with open(data_path, "r", encoding="utf-8") as f:
+            mandi_data = json.load(f)
+
+        for item in mandi_data:
             db.add(MandiPrice(
                 crop=item["crop"].lower(),
                 mandi=item["mandi"],
@@ -21,6 +29,8 @@ def init_db():
                 date=item["date"],
                 source=item["source"]
             ))
+
         db.commit()
+        print("✅ Mandi sample data seeded")
 
     db.close()
