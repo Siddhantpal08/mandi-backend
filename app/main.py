@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import chat
 from app.config import ENV
 from app.db.database import Base, engine
+from app.db.init_db import init_db
+
+init_db()
 
 app = FastAPI(
     title="AI Mandi Intelligence Backend",
