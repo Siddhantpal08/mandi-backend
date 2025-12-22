@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, Date
+from sqlalchemy import Column, Integer, String, Date, Text, DateTime
 from app.db.database import Base
+from datetime import datetime
+
 
 class MandiPrice(Base):
     __tablename__ = "mandi_prices"
@@ -14,3 +16,14 @@ class MandiPrice(Base):
     modal_price = Column(Integer)
     date = Column(Date)
     source = Column(String)
+
+
+class AIExplanationLog(Base):
+    __tablename__ = "ai_explanation_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    crop = Column(String, index=True)
+    mandi = Column(String)
+    language = Column(String(5))
+    explanation = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)

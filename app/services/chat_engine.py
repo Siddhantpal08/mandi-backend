@@ -3,6 +3,7 @@ from app.services.crop_detector import detect_crop
 from app.services.mandi_service import get_price_by_crop
 from app.services.trend_service import analyze_trend
 from app.services.confidence_service import calculate_confidence
+from app.config import GEMINI_API_KEY, AI_ENABLED
 
 
 def handle_chat(
@@ -12,45 +13,62 @@ def handle_chat(
     location: dict | None,
     ai_enabled: bool
 ):
-    # -------- intent & crop --------
+    if memory is None:
+        memory = {}
+
+    if location is None:
+        location = {}
+
     intent = detect_intent(message)
     crop = detect_crop(message) or memory.get("lastCrop")
 
     if not crop:
         return {
-            "text": (
-                "कृपया फसल का नाम बताएं।"
-                if language == "hi"
-                else "Please mention the crop name."
-            ),
+            "text": "कृपया फसल का नाम बताएं।" if language == "hi" else "Please mention the crop name.",
             "memory": memory
         }
 
-    # -------- PRICE --------
+    # ---------- PRICE ----------
     if intent == "price":
         data = get_price_by_crop(crop, location)
 
         if not data:
             return {
-                "text": (
-                    "इस फसल के लिए डेटा उपलब्ध नहीं है।"
-                    if language == "hi"
-                    else "No data available for this crop."
-                ),
+                "text": "डेटा उपलब्ध नहीं है।" if language == "hi" else "No data available.",
                 "memory": memory
             }
 
-        # ✅ FIXED: dict-based memory
-        memory["lastCrop"] = crop
-        memory["lastIntent"] = "price"
-        memory["lastDistrict"] = data["district"]
-        memory["lastState"] = data["state"]
-        memory["lastMandi"] = data["mandi"]
+        memory.update({
+            "lastCrop": crop,
+            "lastIntent": "price",
+            "lastDistrict": data["district"],
+            "lastState": data["state"],
+            "lastMandi": data["mandi"]
+        })
 
         explanation = None
-        if ai_enabled:
-            from app.services.ai_explainer import explain_price
-            explanation = explain_price(data, language)
+
+        # 🔐 AI GATE (3 CONDITIONS)
+        if (
+            ai_enabled and
+            AI_ENABLED and
+            GEMINI_API_KEY
+        ):
+            try:
+                from app.services.ai_explainer import explain_price
+                from app.services.ai_logger import log_ai_explanation
+
+                explanation = explain_price(data, language)
+
+                if explanation:
+                    log_ai_explanation(
+                        crop=crop,
+                        mandi=data["mandi"],
+                        language=language,
+                        explanation=explanation
+                    )
+            except Exception:
+                explanation = None
 
         base_text = (
             f"📍 {data['mandi']} मंडी में {crop} का भाव ₹{data['modalPrice']} प्रति क्विंटल है।"
@@ -58,53 +76,31 @@ def handle_chat(
             else f"📍 {data['mandi']} mandi {crop} price is ₹{data['modalPrice']} per quintal."
         )
 
-        final_text = (
-            f"{base_text}\n\n🧠 {explanation}"
-            if explanation
-            else base_text
-        )
-
         return {
-            "text": final_text,
+            "text": f"{base_text}\n\n🧠 {explanation}" if explanation else base_text,
             "priceData": data,
             "confidence": calculate_confidence(data["date"]),
             "memory": memory
         }
 
-    # -------- TREND --------
+    # ---------- TREND ----------
     if intent == "trend":
         data = get_price_by_crop(crop, location)
 
         if not data:
             return {
-                "text": (
-                    "ट्रेंड डेटा उपलब्ध नहीं है।"
-                    if language == "hi"
-                    else "Trend data not available."
-                ),
+                "text": "ट्रेंड डेटा नहीं है।" if language == "hi" else "Trend data not available.",
                 "memory": memory
             }
 
-        trend = analyze_trend(
-            data["minPrice"],
-            data["maxPrice"]
-        )
+        trend = analyze_trend(data["minPrice"], data["maxPrice"])
 
         return {
-            "text": (
-                f"{crop} की कीमतों का रुझान {trend} है।"
-                if language == "hi"
-                else f"{crop} price trend is {trend}."
-            ),
+            "text": f"{crop} की कीमतों का रुझान {trend} है।" if language == "hi" else f"{crop} price trend is {trend}.",
             "memory": memory
         }
 
-    # -------- FALLBACK --------
     return {
-        "text": (
-            "आप भाव या ट्रेंड से जुड़ा सवाल पूछ सकते हैं।"
-            if language == "hi"
-            else "You can ask about prices or trends."
-        ),
+        "text": "आप भाव या ट्रेंड पूछ सकते हैं।" if language == "hi" else "You can ask about prices or trends.",
         "memory": memory
     }
