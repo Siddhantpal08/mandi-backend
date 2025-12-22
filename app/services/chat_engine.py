@@ -3,23 +3,18 @@ from app.services.crop_detector import detect_crop
 from app.services.mandi_service import get_price_by_crop
 from app.services.trend_service import analyze_trend
 from app.services.confidence_service import calculate_confidence
-from app.models.chat import ChatMemory
 
 
 def handle_chat(
     message: str,
-    memory: ChatMemory | None,
+    memory: dict,
     language: str,
     location: dict | None,
     ai_enabled: bool
 ):
-    # Ensure memory always exists
-    if memory is None:
-        memory = ChatMemory()
-
-    # ---------------- Detect intent & crop ----------------
+    # -------- intent & crop --------
     intent = detect_intent(message)
-    crop = detect_crop(message) or memory.lastCrop
+    crop = detect_crop(message) or memory.get("lastCrop")
 
     if not crop:
         return {
@@ -28,10 +23,10 @@ def handle_chat(
                 if language == "hi"
                 else "Please mention the crop name."
             ),
-            "memory": memory.model_dump()
+            "memory": memory
         }
 
-    # ---------------- PRICE ----------------
+    # -------- PRICE --------
     if intent == "price":
         data = get_price_by_crop(crop, location)
 
@@ -42,15 +37,15 @@ def handle_chat(
                     if language == "hi"
                     else "No data available for this crop."
                 ),
-                "memory": memory.model_dump()
+                "memory": memory
             }
 
-        # ✅ Update memory correctly (NO .update())
-        memory.lastCrop = crop
-        memory.lastIntent = intent
-        memory.lastDistrict = data.get("district")
-        memory.lastState = data.get("state")
-        memory.lastMandi = data.get("mandi")
+        # ✅ FIXED: dict-based memory
+        memory["lastCrop"] = crop
+        memory["lastIntent"] = "price"
+        memory["lastDistrict"] = data["district"]
+        memory["lastState"] = data["state"]
+        memory["lastMandi"] = data["mandi"]
 
         explanation = None
         if ai_enabled:
@@ -73,10 +68,10 @@ def handle_chat(
             "text": final_text,
             "priceData": data,
             "confidence": calculate_confidence(data["date"]),
-            "memory": memory.model_dump()
+            "memory": memory
         }
 
-    # ---------------- TREND ----------------
+    # -------- TREND --------
     if intent == "trend":
         data = get_price_by_crop(crop, location)
 
@@ -87,7 +82,7 @@ def handle_chat(
                     if language == "hi"
                     else "Trend data not available."
                 ),
-                "memory": memory.model_dump()
+                "memory": memory
             }
 
         trend = analyze_trend(
@@ -95,51 +90,21 @@ def handle_chat(
             data["maxPrice"]
         )
 
-        memory.lastCrop = crop
-        memory.lastIntent = intent
-
         return {
             "text": (
                 f"{crop} की कीमतों का रुझान {trend} है।"
                 if language == "hi"
                 else f"{crop} price trend is {trend}."
             ),
-            "memory": memory.model_dump()
+            "memory": memory
         }
 
-    # ---------------- SELL ----------------
-    if intent == "sell":
-        memory.lastCrop = crop
-        memory.lastIntent = intent
-
-        return {
-            "text": (
-                f"{crop} के लिए अगले 7–10 दिन में बेचने पर बेहतर मौका मिल सकता है।"
-                if language == "hi"
-                else f"Selling {crop} in the next 7–10 days may be beneficial."
-            ),
-            "memory": memory.model_dump()
-        }
-
-    # ---------------- NEARBY ----------------
-    if intent == "nearby":
-        memory.lastIntent = intent
-
-        return {
-            "text": (
-                "पास की मंडियों का फीचर जल्द आ रहा है।"
-                if language == "hi"
-                else "Nearby mandi feature is coming soon."
-            ),
-            "memory": memory.model_dump()
-        }
-
-    # ---------------- FALLBACK ----------------
+    # -------- FALLBACK --------
     return {
         "text": (
-            "आप भाव, ट्रेंड या बेचने से जुड़ा सवाल पूछ सकते हैं।"
+            "आप भाव या ट्रेंड से जुड़ा सवाल पूछ सकते हैं।"
             if language == "hi"
-            else "You can ask about prices, trends, or selling advice."
+            else "You can ask about prices or trends."
         ),
-        "memory": memory.model_dump()
+        "memory": memory
     }
