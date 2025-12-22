@@ -1,6 +1,6 @@
 # app/middleware/security.py
 from fastapi import Request, HTTPException
-from app.core.config import API_KEY
+from app.config import API_KEY
 
 async def verify_api_key(request: Request):
     key = request.headers.get("x-api-key")
