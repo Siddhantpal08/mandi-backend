@@ -2,23 +2,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import chat
 from app.config import ENV
-from app.db.database import Base, engine
 from app.db.init_db import init_db
-
-init_db()
 
 app = FastAPI(
     title="AI Mandi Intelligence Backend",
     description="Backend for Agriculture Decision Support System",
-    version="1.0.0",
+    version="0.1.0",
     docs_url="/docs" if ENV == "dev" else None,
     redoc_url=None
 )
 
-@app.on_event("startup")
-def startup():
-    Base.metadata.create_all(bind=engine)
-
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,6 +20,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ✅ RUN DB INIT ON STARTUP
+@app.on_event("startup")
+def startup_event():
+    init_db()
+
+# Routes
 app.include_router(chat.router, prefix="/chat")
 
 @app.get("/")
